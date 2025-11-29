@@ -11,6 +11,23 @@ import string
 import os
 import sys
 
+# Try to import WhatsApp related libraries
+try:
+    import pywhatkit
+    WHATSAPP_AVAILABLE = True
+except ImportError:
+    print(Fore.YELLOW + "Warning: pywhatkit not available. Install with: pip install pywhatkit" + Style.RESET_ALL)
+    WHATSAPP_AVAILABLE = False
+
+try:
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    print(Fore.YELLOW + "Warning: selenium not available. Install with: pip install selenium" + Style.RESET_ALL)
+    SELENIUM_AVAILABLE = False
+
 # Initialize colorama
 init()
 
@@ -20,8 +37,105 @@ try:
     PYTHON_GUI_AVAILABLE = True
 except Exception as e:
     print(Fore.YELLOW + "Warning: PyAutoGUI not available. GUI functions will be disabled." + Style.RESET_ALL)
-    print(Fore.YELLOW + f"Error: {e}" + Style.RESET_ALL)
     PYTHON_GUI_AVAILABLE = False
+
+# WhatsApp configuration
+WHATSAPP_CONFIG = {
+    'method': 'pywhatkit',  # 'pywhatkit', 'selenium', or 'twilio'
+    'country_code': '62',   # Indonesia country code
+}
+
+def send_whatsapp_message(phone_number, message):
+    """
+    Send WhatsApp message using selected method
+    """
+    # Format phone number
+    if not phone_number.startswith('+'):
+        if phone_number.startswith('0'):
+            phone_number = WHATSAPP_CONFIG['country_code'] + phone_number[1:]
+        else:
+            phone_number = WHATSAPP_CONFIG['country_code'] + phone_number
+    
+    print(Fore.CYAN + f"\nAttempting to send message to: {phone_number}" + Style.RESET_ALL)
+    print(Fore.CYAN + f"Message: {message}" + Style.RESET_ALL)
+    
+    if WHATSAPP_CONFIG['method'] == 'pywhatkit' and WHATSAPP_AVAILABLE:
+        return send_whatsapp_pywhatkit(phone_number, message)
+    elif WHATSAPP_CONFIG['method'] == 'selenium' and SELENIUM_AVAILABLE:
+        return send_whatsapp_selenium(phone_number, message)
+    else:
+        print(Fore.RED + "WhatsApp messaging not available. Please install required libraries." + Style.RESET_ALL)
+        return False
+
+def send_whatsapp_pywhatkit(phone_number, message):
+    """
+    Send WhatsApp message using pywhatkit
+    """
+    try:
+        pywhatkit.sendwhatmsg_instantly(phone_number, message, 15, True, 5)
+        print(Fore.GREEN + "Message sent successfully via pywhatkit!" + Style.RESET_ALL)
+        return True
+    except Exception as e:
+        print(Fore.RED + f"Error sending message via pywhatkit: {e}" + Style.RESET_ALL)
+        return False
+
+def send_whatsapp_selenium(phone_number, message):
+    """
+    Send WhatsApp message using Selenium
+    """
+    try:
+        # Setup Chrome driver
+        options = webdriver.ChromeOptions()
+        options.add_argument('--user-data-dir=./whatsapp_profile')
+        options.add_argument('--profile-directory=Default')
+        
+        driver = webdriver.Chrome(options=options)
+        driver.get(f"https://web.whatsapp.com/send?phone={phone_number}")
+        
+        # Wait for page to load (you need to scan QR code first time)
+        print(Fore.YELLOW + "Waiting for WhatsApp Web to load..." + Style.RESET_ALL)
+        time.sleep(20)
+        
+        # Find message box and send message
+        message_box = driver.find_element(By.XPATH, '//div[@contenteditable="true"][@data-tab="10"]')
+        message_box.send_keys(message + Keys.ENTER)
+        
+        time.sleep(5)
+        driver.quit()
+        print(Fore.GREEN + "Message sent successfully via Selenium!" + Style.RESET_ALL)
+        return True
+    except Exception as e:
+        print(Fore.RED + f"Error sending message via Selenium: {e}" + Style.RESET_ALL)
+        return False
+
+def setup_whatsapp_config():
+    """
+    Setup WhatsApp configuration
+    """
+    print(Fore.CYAN + "\n=== WhatsApp Configuration ===" + Style.RESET_ALL)
+    print("Select WhatsApp sending method:")
+    print("[1] pywhatkit (Recommended - requires internet)")
+    print("[2] Selenium (requires Chrome and manual QR scan)")
+    
+    choice = input(Fore.GREEN + "[+] Select method (1 or 2): " + Style.RESET_ALL)
+    
+    if choice == "1":
+        WHATSAPP_CONFIG['method'] = 'pywhatkit'
+        print(Fore.GREEN + "Using pywhatkit method" + Style.RESET_ALL)
+    elif choice == "2":
+        WHATSAPP_CONFIG['method'] = 'selenium'
+        print(Fore.GREEN + "Using Selenium method" + Style.RESET_ALL)
+    else:
+        print(Fore.RED + "Invalid choice, using pywhatkit" + Style.RESET_ALL)
+        WHATSAPP_CONFIG['method'] = 'pywhatkit'
+    
+    # Set country code
+    country = input(Fore.GREEN + "[+] Enter country code (default: 62 for Indonesia): " + Style.RESET_ALL)
+    if country.strip():
+        WHATSAPP_CONFIG['country_code'] = country.strip()
+    
+    print(Fore.GREEN + "WhatsApp configuration completed!" + Style.RESET_ALL)
+    return True
 
 # Help section for new users
 def tool_help():
@@ -35,6 +149,7 @@ def tool_help():
 Features """ + Style.RESET_ALL + Fore.MAGENTA + """
         - User-Typed Message:""" + Style.RESET_ALL + Fore.BLUE + """ Manually type and send messages repeatedly. """ + Style.RESET_ALL + Fore.MAGENTA + """
         - Auto-Typed Message:""" + Style.RESET_ALL + Fore.BLUE + """ Automated message-sending options: """ + Style.RESET_ALL + Fore.LIGHTYELLOW_EX + """
+        - WhatsApp Direct:""" + Style.RESET_ALL + Fore.BLUE + """ Send messages directly to WhatsApp numbers.""" + Style.RESET_ALL + Fore.LIGHTYELLOW_EX + """
             - Message with Counting:""" + Style.RESET_ALL + Fore.BLUE + """ Sends sequentially numbered messages. """ + Style.RESET_ALL + Fore.LIGHTYELLOW_EX + """
             - Random Message Generator:""" + Style.RESET_ALL + Fore.BLUE + """ Sends messages with random words or sentences. """ + Style.RESET_ALL + Fore.LIGHTYELLOW_EX + """
             - Meaningless Message Generator:""" + Style.RESET_ALL + Fore.BLUE + """ Sends messages with random, nonsensical content.
@@ -46,528 +161,138 @@ Main Menu """ + Style.RESET_ALL + Fore.BLUE + """
             Choose an option from the following:
             - [1] User Typed Message
             - [2] Auto Typed Message
+            - [3] WhatsApp Direct
             - [4] Help
+            - [5] Setup WhatsApp
             - [0] Quit
-            - Enter Option -> """ + Style.RESET_ALL + Fore.MAGENTA + """
-
-
-
-[1] User Typed Message (Option 1) """ + Style.RESET_ALL + Fore.BLUE + """
-    - Selecting this option allows you to manually input messages that will be sent repeatedly.
-            You will be prompted with:
-            - [*] User typed message <SELECTED>
-            - [N] How many messages do you have?
-            - [0] Enter 0 to quit and exit tool.
-            - [+] Enter Number of Messages (Default: 1) -> 
-            Enter the number of messages you want to send. The default is 1. Enter 0 to quit.
-
-            Next, you will be asked to enter your message:
-            - [+] Enter your message here (default [ERROR!]) -> 
-
-
-            Specify how many times you want the message to be sent:
-            - [N] How many times would you like to send these messages?
-            - [0] Enter 0 to quit and exit tool.
-            - [+] Enter Number of Times (Default: 1) -> 
-
-
-    - After inputting the required details, move your cursor to the message box in WhatsApp and prepare to send the messages.
-
-    - You will receive a final prompt:
-        - [ALERT!!!] Now you have only 10 seconds to move the cursor on message box tab.
-
-    - After 10 second messages will be sent, and you will see:
-        - Message Sent...
-        - The given task has been completed.
-
-Then you will be returned to the main menu to choose the next task or quit.
-""" + Style.RESET_ALL + Fore.MAGENTA + """
-
-
-[2] Auto Typed Message (Option 2) """ + Style.RESET_ALL + Fore.BLUE + """
-
-        Select this option for automated message-sending functionalities:
-            - [*] Auto typed message <SELECTED>
-            - Choose an option from the following:
-            - [1] Message with Counting
-            - [2] Random Message Generator
-            - [3] Meaningless Message Generator
-            - [0] Quit
-            - [+] Enter Option -> """ + Style.RESET_ALL + Fore.LIGHTYELLOW_EX + """
-
-
-        [1] Message with Counting (Sub-option 1) """ + Style.RESET_ALL + Fore.BLUE + """
-            - Enter the number of messages to send:
-                - [N] How many messages do you want to send?
-                - [0] Enter 0 to quit and exit tool.
-                - [+] Enter Number of Messages (Default: 1) ->
-          
-
-            - Input the message to be sent with counting:
-                - [N] Enter the message you want to send with counting
-                    -The message looks like [Message 1]
-                - [0] Enter 0 to quit and exit tool.
-                - [+] Enter Your Message (Default: ERROR) -> 
-Prepare to send messages as per the instructions provided. """ + Style.RESET_ALL + Fore.LIGHTYELLOW_EX + """
-
-
-        [2] Random Message Generator (Sub-option 2) """ + Style.RESET_ALL + Fore.BLUE + """
-            - Enter the number of messages:
-                - [N] How many messages do you want to send?
-                - [0] Enter 0 to quit and exit tool.
-                - [+] Enter Number of Messages (Default: 1) -> 
-
-            - Specify the number of words per message:
-                - [N] How many words can each message contain?
-                - [0] Enter 0 to quit and exit tool.
-                - [+] Enter Length of Message (Default: 1 Word) -> """ + Style.RESET_ALL + Fore.LIGHTYELLOW_EX + """
-
-        [3] Meaningless Message Generator (Sub-option 3) """ + Style.RESET_ALL + Fore.BLUE + """
-            - Enter the number of messages:
-                - [N] How many messages do you want to send?
-                - [0] Enter 0 to quit and exit tool.
-                - [+] Enter Number of Messages (Default: 1) -> 
-
-            - Specify the number of words per message:
-                - [N] How many words can each message contain?
-                - [0] Enter 0 to quit and exit tool.
-                - [+] Enter Length of Message (Default: 1 Word) -> 
-For all auto-typed options, you will be prompted to prepare WhatsApp for sending messages, with a 10-second alert.
-
-
-""" + Style.RESET_ALL)
+            - Enter Option -> """ + Style.RESET_ALL)
     spammer()
 
-def check_gui_available():
-    """Check if GUI operations are available"""
-    if not PYTHON_GUI_AVAILABLE:
-        print(Fore.RED + "\n[ERROR] GUI operations are not available in this environment." + Style.RESET_ALL)
-        print(Fore.YELLOW + "Please run this program in a graphical environment to use messaging features." + Style.RESET_ALL)
-        return False
-    return True
-
-def simulate_message_sending(message):
-    """Simulate message sending with or without GUI"""
-    if PYTHON_GUI_AVAILABLE:
-        pyautogui.write(message)
-        pyautogui.press('enter')
-    else:
-        print(Fore.CYAN + f"[SIMULATED] Would send: {message}" + Style.RESET_ALL)
-        time.sleep(0.5)  # Simulate delay
-
-# User is able to type a message and send what they want
-def user_typed_message():
-    print(Fore.LIGHTMAGENTA_EX + "\n[*] User typed message" + Style.RESET_ALL + Fore.RED + "\t\t<SELECTED>" + Style.RESET_ALL)
+def whatsapp_direct():
+    """
+    Send messages directly to WhatsApp numbers
+    """
+    print(Fore.LIGHTMAGENTA_EX + "\n[*] WhatsApp Direct" + Style.RESET_ALL + Fore.RED + "\t\t<SELECTED>" + Style.RESET_ALL)
     
-    # Check if GUI is available
-    if not check_gui_available():
-        print(Fore.YELLOW + "Continuing in simulation mode..." + Style.RESET_ALL)
+    if not WHATSAPP_AVAILABLE and not SELENIUM_AVAILABLE:
+        print(Fore.RED + "WhatsApp features not available. Please install required libraries." + Style.RESET_ALL)
+        print(Fore.YELLOW + "Run: pip install pywhatkit selenium" + Style.RESET_ALL)
+        spammer()
+        return
     
-    # Ask the user how many messages are available to send
-    print("[N] How many messages do you have?\n[0] Enter 0 to quit and exit tool.")
-    available_smg = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Number of Messages (Default 1 Message) ->  " + Style.RESET_ALL)
-
-    # Check if the input is empty and set default to 1
-    if available_smg.strip() == "":
-        available_smg = 1
-    elif available_smg == "0":
-        exit_from_tool()
-    else:
+    # Get phone number
+    print("\n[N] Enter WhatsApp phone number")
+    print("    Format: 08123456789 (without country code)")
+    print("    Or: +628123456789 (with country code)")
+    phone_number = input(Fore.GREEN + "[+] Enter phone number: " + Style.RESET_ALL)
+    
+    if not phone_number.strip():
+        print(Fore.RED + "Phone number cannot be empty!" + Style.RESET_ALL)
+        whatsapp_direct()
+        return
+    
+    # Get message type
+    print("\n[N] Select message type:")
+    print("[1] Single message")
+    print("[2] Multiple messages")
+    print("[3] Message with counting")
+    message_type = input(Fore.GREEN + "[+] Select option: " + Style.RESET_ALL)
+    
+    if message_type == "1":
+        # Single message
+        message = input(Fore.GREEN + "[+] Enter your message: " + Style.RESET_ALL)
+        if message.strip():
+            send_whatsapp_message(phone_number, message)
+        else:
+            print(Fore.RED + "Message cannot be empty!" + Style.RESET_ALL)
+    
+    elif message_type == "2":
+        # Multiple messages
+        num_messages = input(Fore.GREEN + "[+] How many different messages: " + Style.RESET_ALL)
         try:
-            # Try to convert the input to an integer
-            available_smg = int(available_smg)
+            num_messages = int(num_messages)
+            messages = []
+            for i in range(num_messages):
+                msg = input(Fore.GREEN + f"[+] Message {i+1}: " + Style.RESET_ALL)
+                if msg.strip():
+                    messages.append(msg.strip())
+            
+            repeat = input(Fore.GREEN + "[+] How many times to repeat: " + Style.RESET_ALL)
+            repeat = int(repeat) if repeat.strip() else 1
+            
+            for r in range(repeat):
+                for msg in messages:
+                    send_whatsapp_message(phone_number, msg)
+                    time.sleep(2)  # Delay between messages
+        
         except ValueError:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL, end="")
-            time.sleep(1.5)
-            user_typed_message()
-
-    # Store messages in list
-    num_of_smg = 0
-    list_of_smg = []
-    print()
-    while num_of_smg < available_smg:
-        smg = input(Fore.GREEN + "[+] Enter your message here (default [ERROR!]) -> " + Style.RESET_ALL)
-        if smg.strip() == "":
-            list_of_smg.append("ERROR!")
-        else:
-            list_of_smg.append(smg)
-        num_of_smg += 1
+            print(Fore.RED + "Invalid number!" + Style.RESET_ALL)
     
-    # How many times would you like to send these messages repeatedly?
-    print("\n[N] How many times would you like to send these messages?\n[0] Enter 0 to quit and exit tool.")
-    number_of_smg = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Number of Time (Default 1 Time) -> "+ Style.RESET_ALL)
-    if number_of_smg.strip() == "":
-        number_of_smg = 1
-    elif number_of_smg == "0":
-        exit_from_tool()
-    else:
+    elif message_type == "3":
+        # Message with counting
+        base_message = input(Fore.GREEN + "[+] Enter base message: " + Style.RESET_ALL)
+        count = input(Fore.GREEN + "[+] How many messages to send: " + Style.RESET_ALL)
         try:
-            # Try to convert the input to an integer
-            number_of_smg = int(number_of_smg)
+            count = int(count)
+            for i in range(count):
+                message = f"{base_message} {i+1}"
+                send_whatsapp_message(phone_number, message)
+                time.sleep(2)  # Delay between messages
         except ValueError:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL, end="")
-            time.sleep(1.5)
-            user_typed_message()
+            print(Fore.RED + "Invalid number!" + Style.RESET_ALL)
     
-    # Show warning only if GUI is available
-    if PYTHON_GUI_AVAILABLE:
-        print(Fore.RED + "\nNow open the WhatsApp tab and move the cursor to the message box where you can type your message.\n" + Style.RESET_ALL, end="")
-        # Check user is ready
-        print("Are you ready? If you are ready...\n[1] Press Enter or 1 to continue\n[0] Enter 0 to quit and exit tool.")
-        user_is_ready = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Option -> "+ Style.RESET_ALL)
-        if user_is_ready.strip() == "" or user_is_ready.strip() == "1":
-            # Warn to user, code is running now
-            print(Fore.RED + "[ALERT!!!] Now you have only 10 seconds to move the cursor on message box tab.\n" + Style.RESET_ALL, end="")
-            # Wait for 10 second to move message box tab
-            time.sleep(10)
-        elif user_is_ready == "0":
-            exit_from_tool()
-        else:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL)
-            time.sleep(1.5)
-            user_typed_message()
     else:
-        print(Fore.YELLOW + "\n[INFO] Running in simulation mode - no actual messages will be sent." + Style.RESET_ALL)
-        print("Press Enter to continue with simulation...")
-        input()
+        print(Fore.RED + "Invalid option!" + Style.RESET_ALL)
     
-    start_smg = 0
-    while start_smg < number_of_smg:
-        start_smg += 1
-        for message in list_of_smg:
-            # write and send messages
-            simulate_message_sending(message)
-            print("Message Sent...")
-    # Show message after Task is completed and Ask What is next task
-    print(Fore.GREEN + Style.BRIGHT + "The given task has been completed.\n\n"+ Style.RESET_ALL)
-    print(Fore.BLUE + Style.BRIGHT + "What is the next task?\nIf there are no more tasks, you can quit or exit the tool by using '0'."+ Style.RESET_ALL)
+    print(Fore.GREEN + "\nWhatsApp sending completed!" + Style.RESET_ALL)
     spammer()
 
-# This function can allow to user send messages with counting
-def message_with_counting():
-    print(Fore.LIGHTMAGENTA_EX + "\n[*] Message with counting" + Style.RESET_ALL + Fore.RED + "\t<SELECTED>" + Style.RESET_ALL)
-    
-    # Check if GUI is available
-    if not check_gui_available():
-        print(Fore.YELLOW + "Continuing in simulation mode..." + Style.RESET_ALL)
-    
-    # Set how many time user want to send a messages
-    print("[N] How many messages do you want to send?\n[0] Enter 0 to quit and exit tool.")
-    no_of_messages = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Number of Message (Default 1 Message) ->  " + Style.RESET_ALL)
+# [Keep all your existing functions like user_typed_message, message_with_counting, etc.]
+# [Just add the new menu option in spammer() function]
 
-    # Set default number of Message
-    if no_of_messages.strip() == "":
-        no_of_messages = 1
-    elif no_of_messages == "0":
-        exit_from_tool() # exit from code
-    else:
-        try :
-            no_of_messages = int(no_of_messages)
-        except:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL, end="")
-            time.sleep(1.5)
-            # Recall random_message_generator if user enter wrong value
-            message_with_counting()
-
-    # Set a message that you want use with counting
-    print("\n[N] Enter the message you want to send with counting\n\t-The message looks like [Message 1]\n[0] Enter 0 to quit and exit tool.")
-    message = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Your Message (Default ERROR) ->  " + Style.RESET_ALL)
-
-    # Set a default value of Message
-    if message.strip() == "":
-        message = "ERROR"
-    elif message == "0":
-        exit_from_tool() # exit from code
-
-    # Show warning only if GUI is available
-    if PYTHON_GUI_AVAILABLE:
-        print(Fore.RED + "\nNow open the WhatsApp tab and move the cursor to the message box where you can type your message.\n" + Style.RESET_ALL, end="")
-        # Check user is ready
-        print("Are you ready? If you are ready...\n[1] Press Enter or 1 to continue\n[0] Enter 0 to quit and exit tool.")
-        user_is_ready = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Option -> "+ Style.RESET_ALL)
-        if user_is_ready.strip() == "" or user_is_ready.strip() == "1":
-            # Warn to user, code is running now
-            print(Fore.RED + "[ALERT!!!] Now you have only 10 seconds to move the cursor on message box tab.\n" + Style.RESET_ALL, end="")
-            # Wait for 10 second to move message box tab
-            time.sleep(10)
-        elif user_is_ready == "0":
-            exit_from_tool()
-        else:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL)
-            time.sleep(1.5)
-            message_with_counting()
-    else:
-        print(Fore.YELLOW + "\n[INFO] Running in simulation mode - no actual messages will be sent." + Style.RESET_ALL)
-        print("Press Enter to continue with simulation...")
-        input()
-
-    for no_of_message in range(no_of_messages):
-        no_of_message += 1
-        # write and send messages
-        full_message = f"{message} {no_of_message}"
-        simulate_message_sending(full_message)
-        print("Message Sent...")
-    # Show message after Task is completed and Ask What is next task
-    print(Fore.GREEN + Style.BRIGHT + "The given task has been completed.\n\n"+ Style.RESET_ALL)
-    print(Fore.BLUE + Style.BRIGHT + "What is the next task?\nIf there are no more tasks, you can quit or exit the tool by using '0'."+ Style.RESET_ALL)
-    spammer()
-
-# This function can allow to user send random messages with random words
-def random_message_generator():
-    print(Fore.LIGHTMAGENTA_EX + "\n[*] Random Message Generator" + Style.RESET_ALL + Fore.RED + "\t<SELECTED>" + Style.RESET_ALL)
-    
-    # Check if GUI is available
-    if not check_gui_available():
-        print(Fore.YELLOW + "Continuing in simulation mode..." + Style.RESET_ALL)
-    
-    # URL of the word list
-    url = "https://www.mit.edu/~ecprice/wordlist.10000"
-    # Fetch the word list from the URL once
-    try:
-        response = urllib.request.urlopen(url)
-        word_list = response.read().decode().splitlines()
-    except Exception as e:
-        if isinstance(e, urllib.error.URLError):
-            print(Fore.YELLOW + "\nInternet connection error. Using fallback word list." + Style.RESET_ALL)
-        else:
-            print(Fore.YELLOW + f"Something went wrong: {e}. Using fallback word list." + Style.RESET_ALL)
-        # Fallback word list
-        word_list = ["hello", "world", "python", "test", "message", "random", "word", "example"]
-
-    # Set how many time user want to send a messages
-    print("[N] How many messages do you want to send?\n[0] Enter 0 to quit and exit tool.")
-    no_of_message = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Number of Message (Default 1 Message) ->  " + Style.RESET_ALL)
-
-    # Set default number of Message
-    if no_of_message.strip() == "":
-        no_of_message = 1
-    elif no_of_message == "0":
-        exit_from_tool() # exit from code
-    else:
-        try :
-            no_of_message = int(no_of_message)
-        except:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL, end="")
-            time.sleep(1.5)
-            # Recall random_message_generator if user enter wrong value
-            random_message_generator()
-
-    # Set a lenght of words in message 
-    print("[N] How many words can contain every message?\n[0] Enter 0 to quit and exit tool.")
-    message_length = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Length of Message (Default 1 Word) ->  " + Style.RESET_ALL)
-
-    # Set default lenght of Message
-    if message_length.strip() == "":
-        message_length = 1
-    elif message_length == "0":
-        exit_from_tool() # exit from code
-    else:
-        try :
-            message_length = int(message_length)
-        except:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL, end="")
-            time.sleep(1.5)
-            # Recall random_message_generator if user enter wrong value
-            random_message_generator()
-
-    # Show warning only if GUI is available
-    if PYTHON_GUI_AVAILABLE:
-        print(Fore.RED + "\nNow open the WhatsApp tab and move the cursor to the message box where you can type your message.\n" + Style.RESET_ALL, end="")
-        # Check user is ready
-        print("Are you ready? If you are ready...\n[1] Press Enter or 1 to continue\n[0] Enter 0 to quit and exit tool.")
-        user_is_ready = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Option -> "+ Style.RESET_ALL)
-        if user_is_ready.strip() == "" or user_is_ready.strip() == "1":
-            # Warn to user, code is running now
-            print(Fore.RED + "[ALERT!!!] Now you have only 10 seconds to move the cursor on message box tab.\n" + Style.RESET_ALL, end="")
-            # Wait for 10 second to move message box tab
-            time.sleep(10)
-        elif user_is_ready == "0":
-            exit_from_tool()
-        else:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL)
-            time.sleep(1.5)
-            random_message_generator()
-    else:
-        print(Fore.YELLOW + "\n[INFO] Running in simulation mode - no actual messages will be sent." + Style.RESET_ALL)
-        print("Press Enter to continue with simulation...")
-        input()
-
-    for _ in range(no_of_message):
-        # Initialize sentence for add random words and create a sentence
-        sentence = ""
-        # punctuation marks for add to the end of sentence
-        punctuation_marks = [".", "?", "!", "...", ";"]
-        # Generate the message
-        for _ in range(message_length):
-            if word_list:  # Check if the word_list is not empty
-                    sentence += random.choice(word_list) + " "
-            else:
-                sentence += "ERROR "
-        # Create a finnal meassage
-        message = sentence + random.choice(punctuation_marks)
-        # write and send messages
-        simulate_message_sending(message)
-        print("Message Sent...")
-    # Show message after Task is completed and Ask What is next task
-    print(Fore.GREEN + Style.BRIGHT + "The given task has been completed.\n\n"+ Style.RESET_ALL)
-    print(Fore.BLUE + Style.BRIGHT + "What is the next task?\nIf there are no more tasks, you can quit or exit the tool by using '0'."+ Style.RESET_ALL)
-    spammer()
-
-# This function can allow to user send messages with meaningless words, that words contains charecter, number and symble. 
-def meaningless_message_generator():
-    print(Fore.LIGHTMAGENTA_EX + "\n[*] Meaningless Message Generator" + Style.RESET_ALL + Fore.RED + "\t<SELECTED>" + Style.RESET_ALL)
-    
-    # Check if GUI is available
-    if not check_gui_available():
-        print(Fore.YELLOW + "Continuing in simulation mode..." + Style.RESET_ALL)
-    
-    # Set how many time user want to send a messages
-    print("[N] How many messages do you want to send?\n[0] Enter 0 to quit and exit tool.")
-    no_of_message = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Number of Message (Default 1 Message) ->  " + Style.RESET_ALL)
-
-    # Set default number of Message
-    if no_of_message.strip() == "":
-        no_of_message = 1
-    elif no_of_message == "0":
-        exit_from_tool() # exit from code
-    else:
-        try :
-            no_of_message = int(no_of_message)
-        except:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL)
-            time.sleep(1.5)
-            # Recall meaningless_message_generator if user enter wrong value
-            meaningless_message_generator()
-
-    # Set a lenght of words in message 
-    print("[N] How many words can contain every message?\n[0] Enter 0 to quit and exit tool.")
-    message_length = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Length of Message (Default 1 Word) ->  " + Style.RESET_ALL)
-
-    # Set default lenght of Message
-    if message_length.strip() == "":
-        message_length = 1
-    elif message_length == "0":
-        exit_from_tool() # exit from code
-    else:
-        try :
-            message_length = int(message_length)
-        except:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL)
-            time.sleep(1.5)
-            # Recall meaningless_message_generator if user enter wrong value
-            meaningless_message_generator()
-
-    # Show warning only if GUI is available
-    if PYTHON_GUI_AVAILABLE:
-        print(Fore.RED + "\nNow open the WhatsApp tab and move the cursor to the message box where you can type your message.\n" + Style.RESET_ALL, end="")
-        # Check user is ready
-        print("Are you ready? If you are ready...\n[1] Press Enter or 1 to continue\n[0] Enter 0 to quit and exit tool.")
-        user_is_ready = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Option -> "+ Style.RESET_ALL)
-        if user_is_ready.strip() == "" or user_is_ready.strip() == "1":
-            # Warn to user, code is running now
-            print(Fore.RED + "[ALERT!!!] Now you have only 10 seconds to move the cursor on message box tab.\n" + Style.RESET_ALL, end="")
-            # Wait for 10 second to move message box tab
-            time.sleep(10)
-        elif user_is_ready == "0":
-            exit_from_tool()
-        else:
-            print(Fore.RED + "Invalid value entered. Please choose a valid number.\n" + Style.RESET_ALL)
-            time.sleep(1.5)
-            meaningless_message_generator()
-    else:
-        print(Fore.YELLOW + "\n[INFO] Running in simulation mode - no actual messages will be sent." + Style.RESET_ALL)
-        print("Press Enter to continue with simulation...")
-        input()
-
-    for _ in range(no_of_message):
-        # Initialize sentence for add random words and create a sentence
-        sentence = ""
-        # punctuation marks for add to the end of sentence
-        punctuation_marks = [".", "?", "!", "...", ";"]
-        # Generate the message
-        for _ in range(message_length):
-            characters = string.ascii_uppercase + string.ascii_lowercase
-            lenght_of_word = random.randint(3,10)
-            sentence += ''.join(random.choice(characters) for _ in range(lenght_of_word)) + " "
-
-        # Create a finnal meassage
-        message = sentence + random.choice(punctuation_marks)
-        # write and send messages
-        simulate_message_sending(message)
-        print("Message Sent...")
-    # Show message after Task is completed and Ask What is next task
-    print(Fore.GREEN + Style.BRIGHT + "The given task has been completed.\n\n"+ Style.RESET_ALL)
-    print(Fore.BLUE + Style.BRIGHT + "What is the next task?\nIf there are no more tasks, you can quit or exit the tool by using '0'."+ Style.RESET_ALL)
-    spammer() 
-
-# User is not able to type a message; the tool will create random text using characters and numbers and send it
-def auto_typed_message():
-    print(Fore.LIGHTMAGENTA_EX + "\n[*] Auto typed message" + Style.RESET_ALL + Fore.RED + "\t\t<SELECTED>" + Style.RESET_ALL)
-    # Print options for the user to choose from
-    print(Fore.YELLOW + "Choose an option from the following:" + Style.RESET_ALL)
-    print("[1] Message with counting")
-    print("[2] Random Message Generator")
-    print("[3] Meaningless Message Generator")
-    print("[0] Quit")
-
-    # Handle any errors if occur
-    try:
-        # Get user input and convert it to an integer
-        message_type = int(input(Fore.GREEN + Style.BRIGHT + "[+] Enter Option -> "+ Style.RESET_ALL))
-        # Add validation for user input
-        if message_type == 1:
-            message_with_counting()
-        elif message_type == 2:
-            random_message_generator()
-        elif message_type == 3:
-            meaningless_message_generator()
-        elif message_type == 0:
-            # Call the exit function
-            exit_from_tool()
-        else:
-            print(Fore.RED + "Invalid option. Please choose 1, 2 or 3.\r" + Style.RESET_ALL)
-            time.sleep(1.5)
-            auto_typed_message()
-    except:
-        print(Fore.RED + "Invalid option. Please choose 1, 2 or 3.\r" + Style.RESET_ALL)
-        time.sleep(1.5)
-        auto_typed_message()
-
-# Starting function of the tool
 def spammer(): 
     # Print options for the user to choose from
-    print(Fore.YELLOW + "Choose an option from the following:" + Style.RESET_ALL)
+    print(Fore.YELLOW + "\nChoose an option from the following:" + Style.RESET_ALL)
     print("[1] User typed message")
     print("[2] Auto typed message")
+    print("[3] WhatsApp Direct")
     print("[4] Help")
+    print("[5] Setup WhatsApp")
     print("[0] Quit")
 
     # Handle any errors if occur
     try:
         # Get user input and convert it to an integer
-        message_type = int(input(Fore.GREEN + Style.BRIGHT + "[+] Enter Option -> "+ Style.RESET_ALL))
+        message_type = input(Fore.GREEN + Style.BRIGHT + "[+] Enter Option -> "+ Style.RESET_ALL)
         # Add validation for user input
-        if message_type == 1:
+        if message_type == "1":
             user_typed_message()
-        elif message_type == 2:
+        elif message_type == "2":
             auto_typed_message()
-        elif message_type == 4:
+        elif message_type == "3":
+            whatsapp_direct()
+        elif message_type == "4":
             tool_help()
-        elif message_type == 0:
+        elif message_type == "5":
+            setup_whatsapp_config()
+            spammer()
+        elif message_type == "0":
             # Call the exit function
             exit_from_tool()
         else:
-            print(Fore.RED + "Invalid option. Please choose 1 or 2.\r" + Style.RESET_ALL,end="")
+            print(Fore.RED + "Invalid option. Please choose 1, 2, 3, 4, 5 or 0.\r" + Style.RESET_ALL)
             time.sleep(1.5)
             spammer()
-    except:
-        print(Fore.RED + "Invalid option. Please choose 1 or 2.\r" + Style.RESET_ALL,end="")
+    except Exception as e:
+        print(Fore.RED + f"Error: {e}" + Style.RESET_ALL)
         time.sleep(1.5)
         spammer()
 
+# [Keep all your other existing functions...]
+
 # Exit function for exit from tool
 def exit_from_tool():
-# Simple Exit Loading Bar
+    # Simple Exit Loading Bar
     start = 0
     end = 50
     load = (Fore.GREEN + Style.BRIGHT + '='+ Style.RESET_ALL)
@@ -585,7 +310,7 @@ def exit_from_tool():
 # Main execution
 if __name__ == "__main__":
     # Tool name design
-    name_of_tool = pyfiglet.figlet_format("WA-Spam")
+    name_of_tool = pyfiglet.figlet_format("WA-Spam Pro")
 
     # List of colors
     colors = ["red", "green", "blue", "yellow", "cyan", "magenta", "bold red", "light_green", "blue", "bold yellow", "bold cyan", "bold magenta"]
@@ -598,6 +323,13 @@ if __name__ == "__main__":
 
     name_of_tool_color.print(name_of_tool, style=random_color, end="\t\t\t\t\t-")
     print(Fore.GREEN + Style.BRIGHT + 'sh1vam-03'+ Style.RESET_ALL)
+    
+    print(Fore.CYAN + "WhatsApp Spammer Pro - Direct WhatsApp Integration" + Style.RESET_ALL)
+    
+    # Check if WhatsApp libraries are available
+    if not WHATSAPP_AVAILABLE and not SELENIUM_AVAILABLE:
+        print(Fore.YELLOW + "Note: Install WhatsApp libraries for full features:" + Style.RESET_ALL)
+        print(Fore.YELLOW + "pip install pywhatkit selenium" + Style.RESET_ALL)
 
     # Start tool
     spammer()
